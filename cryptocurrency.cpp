@@ -14,6 +14,21 @@ float z = 0.5; // Probability of a fast node
 float ff = 0.5;
 float fs = 0.25;
 float ss = 0.1;
+
+// Randomizor Functions
+float exp_dist(float mean) {
+	random_device rd;
+	mt19937 gen(rd());
+	exponential_distribution<> dist(1.0 / mean);
+	return dist(gen);
+}
+
+float uni_dist(float start, float end) {
+	random_device rd;
+	mt19937 gen(rd());
+	uniform_real_distribution<> dist(start, end);
+	return dist(gen);
+}
 	
 // Classes
 class peer {
@@ -87,17 +102,17 @@ struct tnx {
 class network {
   private:
   	vector<peer*> nodelist;
-	map<int, vector<peer*> > adjlist;
+	map<int, vector< pair< peer*, float > > > adjlist;
 	deque<peer*> unactive;
 
-	void add_edge(int send_id, peer* recv_node) {
+	void add_edge(int send_id, peer* recv_node, float latency) {
 		if(adjlist.find(send_id) == adjlist.end()) {
-			vector<peer*> vec;
-			vec.push_back(recv_node);
+			vector< pair< peer*, float > > vec;
+			vec.push_back(make_pair(recv_node, latency));
 			adjlist[send_id] = vec;
 		}
 		else 
-			adjlist[send_id].push_back(recv_node);
+			adjlist[send_id].push_back(make_pair(recv_node, latency));
 	}
 
   public:
@@ -123,8 +138,9 @@ class network {
 	void addconn(peer* send_node, peer* recv_node) {
 		int send_id = send_node->get_id();
 		int recv_id = recv_node->get_id();
-		add_edge(send_id, recv_node);
-		add_edge(recv_id, send_node);
+		float latency = uni_dist(10, 500) / 1000;
+		add_edge(send_id, recv_node, latency);
+		add_edge(recv_id, send_node, latency);
 		send_node->add_conn();
 		recv_node->add_conn();
 	}
@@ -132,10 +148,19 @@ class network {
 	bool findconn(int u, int v) {
 		int usize = adjlist[u].size();
 		for (int i = 0; i < usize; i++) {
-			if (adjlist[u][i]->get_id() == v)
+			if (adjlist[u][i].first->get_id() == v)
 				return true;
 		}
 		return false;
+	}
+
+	float findlatency(int u, int v) {
+		int usize = adjlist[u].size();
+		for (int i = 0; i < usize; i++) {
+			if (adjlist[u][i].first->get_id() == v)
+				return adjlist[u][i].second;
+		}
+		return 0.0;
 	}
 
 	bool validate(tnx transaction) {
@@ -163,7 +188,7 @@ class network {
 			conn_prob = ff;
 		else
 			conn_prob = ss;
-		float prob = ((float)rand() / (RAND_MAX));
+		float prob = uni_dist(0,1);
 		if (prob < conn_prob)
 			return true;
 		else
@@ -182,10 +207,11 @@ class network {
 				do {
 					int node_num = rand() % nodelist.size();
 					conn_node = nodelist[node_num];
-					if (findconn(node_id, conn_node->get_id()))
+					if (findconn(node_id, conn_node->get_id())) {
 						continue;
+					}
 					connected = try_to_connect(node_type, conn_node->get_type());
-				} while(conn_node->get_id() == node_id || connected == false);
+				} while(conn_node->get_id() == node_id || connected == false || findconn(node_id, conn_node->get_id()));
 				addconn(node, conn_node);
 			}
 			unactive.pop_front();
@@ -197,26 +223,39 @@ class network {
 			int node_id = peerlist.first;
 			cout << "\nnode " << node_id << " : ";
 			for (int i = 0; i < peerlist.second.size(); i++) {
-				peer* node = peerlist.second[i];
+				peer* node = peerlist.second[i].first;
 				cout << node->get_id() << " ";
 			}
 		}
 	}
+
+	float get_latency(peer* send_node, peer*recv_node, int m_size) {
+		bool type1 = send_node->get_type();
+		bool type2 = recv_node->get_type();
+		int c;
+		if (type1 != type2) 
+			c = 5;
+		else if (type1) 
+			c = 100;
+		else
+			c = 5;
+		float d_mean = 96.0 * 1000 / (c * 1024 * 1024);
+		float p = findlatency(send_node->get_id(), recv_node->get_id());
+		cout << "\np = " << p << endl;
+		cout << "c = " << c << endl;
+		cout << "d_mean = " << d_mean << endl;
+		float total_latency = (float)m_size / c + exp_dist(d_mean) + p;
+		return total_latency;
+	}
 };
 
 int main() {
-	// Set Randomizers
-	random_device rd;
-	mt19937 gen(rd());
-	exponential_distribution<> exp_dist(10);
-	uniform_real_distribution<> uni_dist(0, 1);
-	
 	// Create P2P network for cryptocurrency
 	network mycoin;
 	
 	// Add peers the network
 	for (int i = 0; i < N; i++) {
-		float node_type_prob = uni_dist(gen);
+		float node_type_prob = uni_dist(0,1);
 		bool node_type = false;
 		int activation;
 		if (node_type_prob < z)
@@ -228,10 +267,13 @@ int main() {
 		mycoin.addnode(i, node_type, activation);
 	}
 
+	// Connect peers in the network
 	mycoin.connect_graph();
 
 	mycoin.print_graph();
 
-	cout<<"end"<<endl;
+	cout << mycoin.get_latency(mycoin.findnode(0), mycoin.findnode(2), 1);
+
+	cout<<"\nend"<<endl;
 	return 0;
 }
