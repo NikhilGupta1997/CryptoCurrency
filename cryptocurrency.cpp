@@ -38,6 +38,7 @@ class peer {
 	bool type;
 	int activation;
 	int connected;
+	vector<int> txns;
 	
   public:
 
@@ -83,15 +84,29 @@ class peer {
 	void add_conn() {
 		connected += 1;
 	}
+
+	void add_txn(int id) {
+		txns.push_back(id);
+	}
+
+	bool txn_exists(int id) {
+		if (find(txns.begin(), txns.end(), id) != txns.end())
+			return true;
+		else
+			return false;
+	}
 };
 
 struct tnx {
+  private:
+  	int id;
   public:
   	int send_id;
   	int recv_id;
   	float amount;
 
-  	tnx(int id1, int id2, float val) { // Create a new transaction
+  	tnx(int txn_id, int id1, int id2, float val) { // Create a new transaction
+  		id = txn_id;
   		send_id = id1;
   		recv_id = id2;
   		amount = val;
@@ -247,6 +262,18 @@ class network {
 		float total_latency = (float)m_size / c + exp_dist(d_mean) + p;
 		return total_latency;
 	}
+
+	void broadcast(int id, peer* recv_node, int send_id) {
+		if (recv_node->txn_exists(id))
+			return;
+		else {
+			recv_node->add_txn(id);
+			for( const auto& peerlist : adjlist[recv_node->get_id()] ) {
+				if(peerlist.first->get_id() != send_id)
+					broadcast(id, peerlist.first, recv_node->get_id());
+			}
+		}
+	}
 };
 
 int main() {
@@ -273,6 +300,8 @@ int main() {
 	mycoin.print_graph();
 
 	cout << mycoin.get_latency(mycoin.findnode(0), mycoin.findnode(2), 1);
+
+	mycoin.broadcast(10, mycoin.findnode(0), 1);
 
 	cout<<"\nend"<<endl;
 	return 0;
