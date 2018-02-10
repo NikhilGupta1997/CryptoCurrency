@@ -142,6 +142,7 @@ public:
 			return;
 		}
 		node *newNode = new node();
+		newNode->blk = new block();
 		newNode->blk->prevblockID = prevblockID;
 		newNode->blk->blockID = blockID;
 		newNode->blk->time_arrival = time_arrival;
@@ -249,18 +250,16 @@ class peer {
 
 	void add_txn(tnx trans) {
 		// need to change the time
-		globalQueueTnx.push_back(trans);
+		sorted_add(trans, globalQueueTnx);
 	}
+	
+	// TODO :  make a function to receive a block and add to the blockchain
 
 	bool txn_exists(int id) {
 		for(auto it : globalQueueTnx)
 			if(it.id == id)
 				return true;
 		return false;	
-		// if (find(globalQueueTnx.begin(), txns.end(), id) != txns.end())
-		// 	return true;
-		// else
-		// 	return false;
 	}
 };
 
@@ -416,17 +415,18 @@ class network {
 		return total_latency;
 	}
 
-	void broadcast(tnx &trans, peer* recv_node, int send_id) {
+	void broadcast_tnx(tnx &trans, peer* recv_node, int send_id) {
 		if (recv_node->txn_exists(trans.id))
 			return;
 		else {
 			recv_node->add_txn(trans);
 			for( const auto& peerlist : adjlist[recv_node->get_id()] ) {
 				if(peerlist.first->get_id() != send_id)
-					broadcast(trans, peerlist.first, recv_node->get_id());
+					broadcast_tnx(trans, peerlist.first, recv_node->get_id());
 			}
 		}
 	}
+	// TODO : need to make a new function to broadcast blocks
 };
 
 int main() {
