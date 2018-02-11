@@ -195,11 +195,11 @@ class blockchain
 		ans_long_chain final_ans(lastNode, min_time ,max_length);
 		return final_ans;
 	}
-public:
 
 	blockchain()
 	{
 		root = new node();
+		root->blk = new block();
 		root->blk->blockID = 0;
 		root->parent = NULL;	
 	}
@@ -371,7 +371,6 @@ class network {
 		if (findnode(id) == NULL) {
 			peer* newnode = new peer(id, type, active);
 			// newnode->set_network(this);
-
 			nodelist.push_back(newnode);
 			unactive.push_back(newnode);
 		}
@@ -473,9 +472,9 @@ class network {
 			c = 5;
 		float d_mean = 96.0 * 1000 / (c * 1024 * 1024);
 		float p = findlatency(send_node->get_id(), recv_node->get_id());
-		cout << "\np = " << p << endl;
-		cout << "c = " << c << endl;
-		cout << "d_mean = " << d_mean << endl;
+		// cout << "\np = " << p << endl;
+		// cout << "c = " << c << endl;
+		// cout << "d_mean = " << d_mean << endl;
 		float total_latency = (float)m_size / c + exp_dist(d_mean) + p;
 		return total_latency;
 	}
@@ -504,14 +503,7 @@ class network {
 	}	
 	
 };
-// network* peer::give_network()
-// {
-// 	return this->coin;
-// }
-// void peer::set_network(network *coin)
-// {
-// 	this->coin = coin;
-// }
+
 void peer::generate_transaction(double time, network * tmp) // for intial time would be zero
 {
 	float pay_amt = longest_one->peer_amount[this->ID] * (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
