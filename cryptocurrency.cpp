@@ -6,6 +6,7 @@
 #include<math.h>
 #include<time.h>
 #include <limits>
+#include <unordered_set>
 using namespace std;
 
 // Global Variables
@@ -40,6 +41,7 @@ struct event
 	int event_type = 0; //0 for tranx, 1 for block
 	int peer_id;
 	double time;
+	double time_gen = -1;  
 	event(int event_type, int peer_id, double time)
 	{
 		this->event_type = event_type;
@@ -81,14 +83,26 @@ struct tnx {
   	}
 };
 
+void sorted_add(tnx trans, vector <tnx> &globalQueueTnx)
+{
+	if(globalQueueTnx.size() == 0)
+		globalQueueTnx.push_back(trans);
+	int i = 0;
+	for( ; i < globalQueueTnx.size(); i++)
+	{
+		if(globalQueueTnx[i].time > trans.time)
+			break;
+	}
+	globalQueueTnx.insert(globalQueueTnx.begin()+i, trans);
+}
+
 struct block
 {
 	int peer_id;
 	int prevblockID;
 	int blockID;
 	double time_arrival;
-	vector<tnx> unspent;
-	//TODO :  I should have a list of transactions as well or make a map for every block and transactions in it
+	vector<tnx> spent;
 };
 struct node
 {
@@ -96,7 +110,6 @@ struct node
 	node *parent;
 	vector<node *> nextBlocks;
 	vector<float> peer_amount;
-	vector<tnx> unspent_trans;
 	node()
 	{
 		peer_amount.assign(N, 100.0);
@@ -121,7 +134,7 @@ struct ans_long_chain
 };	
 class blockchain
 {
-	
+	public:
 	node *root;
 
 	node* find_block(node *start, int block_id)
@@ -139,6 +152,25 @@ class blockchain
 				return ans;
 		}
 		return NULL;
+	}
+
+	node* find_common_anc(node *prev, node *curr)
+	{
+		node *tmp = prev;
+		unordered_set<node*> parents;
+		while(tmp)
+		{
+			parents.insert(tmp->parent);
+			tmp = tmp->parent;
+		}
+		node* tempo = curr;
+		while(tempo)
+		{
+			if(parents.find(tempo) != parents.end())
+				return tempo;
+			tempo = tempo->parent; 
+		}
+		return NULL; // Never gonna happen
 	}
 
 	ans_long_chain getLongestChain(node *start, int length)
@@ -174,6 +206,29 @@ public:
 		root->parent = NULL;	
 	}
 
+	void update(vector <tnx> &globalQueueTnx, node* prev, node* curr, int peer_id)
+	{
+		node *anc = find_common_anc(prev, curr);
+		node *tmp = prev;
+		while(tmp != anc)
+		{
+			// i am adding all unspent here which is wrong but ta ka kat denge
+			for(auto it : tmp->blk->spent)
+				sorted_add(it, globalQueueTnx);
+		}
+		tmp = curr;
+		while(tmp != anc)
+		{
+			unordered_set<int> trans; 
+			for(auto it : tmp->blk->spent)
+				trans.insert(it.id);
+			for(int i = 0; i < globalQueueTnx.size(); i++)
+				if(trans.find(globalQueueTnx[i].id) != trans.end())
+					globalQueueTnx.erase(globalQueueTnx.begin()+i);
+			tmp = tmp->parent; 
+		}
+	}
+
 	void add_block(int prevblockID, int blockID, double time_arrival)
 	{
 		node *lastNode = find_block(root, prevblockID);
@@ -189,37 +244,27 @@ public:
 		newNode->blk->blockID = blockID;
 		newNode->blk->time_arrival = time_arrival;
 		lastNode->nextBlocks.push_back(newNode);
-		// TODO : Manage list of transactions coming, adjust time based on latency..
 	}
 
-	void generate_node(double time)
+	node * generate_node(double time)
 	{
 		node *current = new node();
 		current->blk = new block();
 		current->blk->blockID = block_counter;
 		node *longestChain = (getLongestChain(root, 0).last_node);
+		current->parent = longestChain;
 		current->blk->prevblockID = longestChain->blk->blockID;
 		current->blk->time_arrival = time;
 		longestChain->nextBlocks.push_back(current);
 		// we get the previous blockid
 		block_counter++;
-		// Now we need to broadcast this also 
+		return current;
 	}
 };	
 
-void sorted_add(tnx trans, vector <tnx> &globalQueueTnx)
-{
-	if(globalQueueTnx.size() == 0)
-		globalQueueTnx.push_back(trans);
-	int i = 0;
-	for( ; i < globalQueueTnx.size(); i++)
-	{
-		if(globalQueueTnx[i].time > trans.time)
-			break;
-	}
-	globalQueueTnx.insert(globalQueueTnx.begin()+i, trans);
-}
 
+// TODO : Remove Forward dependency : 
+// https://stackoverflow.com/questions/19962812/error-member-access-into-incomplete-type-forward-declaration-of
 class network;
 // Classes
 class peer {
@@ -230,25 +275,27 @@ class peer {
 	int activation;
 	int connected;
 	network *coin;
-	vector <tnx> globalQueueTnx;
+	vector <tnx> globalQueueTnx; // to be maintained at the current block
 	vector<int> blocks_rec;
-	bool anyBlockArrival = false; // set to false while generating time for next block while set true on receiving any block
+	double lastBlockArrival =0.0; 
 	blockchain *chain;
+	node *longest_one;
   public:
 
 	peer(int id, bool speed, int active, network *tmp) {
 		ID = id;
-		amount = 0;
+		// amount = 0;
 		type = speed;
 		activation = active;
 		connected = 0;
 		this->coin = tmp;
 		chain = new blockchain();
+		longest_one = chain->root;
 	}
 
 	void generate_transaction(double time) // for intial time would be zero
 	{
-		float pay_amt = amount * (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
+		float pay_amt = longest_one->peer_amount[this->ID] * (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
 		int rec = rand() % N;
 		while(rec != ID)
 		{
@@ -257,36 +304,45 @@ class peer {
 		tnx trans(++txn_counter, ID, rec, pay_amt, time);
 		double next_time = time + exp_dist(txn_mean);
 		event nextTrans(0, this->ID, next_time);
-		time_simulator.sorted_event_add(nextTrans);
-		// sorted_add(trans, globalQueueTnx);
-		broadcast_tnx(trans, this, -1);
-		// globalQueueTnx.add(txn_counter);
-		// TODO : I have to broadcast it as well (Important)
+		sorted_event_add(nextTrans);
+		coin->broadcast_tnx(trans, this, -1);
 	}
-	void generate_block(double time)
+	void generate_block(double time, double time_gen)
 	{
-
+		// add only those transaction for which time is less than this
+		if(lastBlockArrival <= time && lastBlockArrival > time_gen)
+			return;
+		node *current = chain->generate_node(time);
+		current->blk->peer_id = this->ID;
+		for(auto it : globalQueueTnx)
+		{
+			if(it.time <= time)
+				current->blk->spent.push_back(it);
+			else 
+				break;
+		}
+		coin->broadcast_blk(*(current->blk), this, -1);
 	}
 
 	int get_id() { // Get node id
 		return ID;
 	}
 
-	float get_amount() {
-		return amount;
-	}
+	// float get_amount() {
+	// 	return amount;
+	// }
 
-	void set_amount(float val) {
-		amount = val;
-	}
+	// void set_amount(float val) {
+	// 	amount = val;
+	// }
 
-	void add_amount(float val) {
-		amount += val;
-	}
+	// void add_amount(float val) {
+	// 	amount += val;
+	// }
 
-	void sub_amount(float val) { 
-		amount += val;
-	}
+	// void sub_amount(float val) { 
+	// 	amount += val;
+	// }
 
 	bool get_type() { // Get Speed of node
 		return type;
@@ -315,15 +371,31 @@ class peer {
 	}
 	
 	
-	void add_blk(block blk)
+	void add_blk(block &blk)
 	{
 		if(blk.peer_id != this->ID)
 		{
-			double latency = coin->get_latency(mycoin->nodelist[blk.peer_id.send_id], this, 1); //TODO :  what should be sent instead of 1
+			double latency = coin->get_latency(mycoin->nodelist[blk.peer_id.send_id], this, 1); 
+			//TODO :  what should be sent instead of 1
 			blk.time_arrival += latency;
+			lastBlockArrival = blk.time_arrival;
+			// generate a random variable and create event for next block gen
+			event blk_gen(1, this->ID, lastBlockArrival+exp_dist(block_mean));
+			blk_gen.time_gen = lastBlockArrival;
+			sorted_event_add(blk_gen);
 		}
-		blockchain.add_block(blk.prevblockID, blk.blockID, blk.time_arrival);
-		// Handle Trans
+
+		chain->add_block(blk.prevblockID, blk.blockID, blk.time_arrival);
+		node* new_longest_one = chain->getLongestChain(chain->root, 0).last_node;
+		if(blk.prevblockID != longest_one->blk->blockID && new_longest_one->blk->blockID == blk.blockID)	
+			chain->update(globalQueueTnx, longest_one, new_longest_one, this->ID);
+		longest_one = new_longest_one;
+		blocks_rec.push_back(blk.blockID);
+		for(auto it : blk.spent)
+		{
+
+		}
+		// TODO : Handle Trans and update amounts and mining fees
 	}
 
 	bool txn_exists(int id) {
@@ -407,16 +479,6 @@ class network {
 		}
 		return 0.0;
 	}
-
-	// bool validate(tnx transaction) {
-	// 	int send_id = transaction.send_id;
-	// 	int txn_amount = transaction.amount;
-	// 	peer* send_node = findnode(send_id);
-	// 	if (send_node->get_amount() < txn_amount) 
-	// 		return false;
-	// 	else
-	// 		return true;
-	// }
 
 	bool is_connected() {
 		if (unactive.size() == 0)
@@ -505,7 +567,7 @@ class network {
 		}
 	}
 	void broadcast_blk(block &blk, peer* recv_node, int send_id) {
-		if (recv_node->blk_exists(blk.blockID))
+		if (recv_node->blk_exist(blk.blockID))
 			return;
 		else {
 			recv_node->add_blk(blk);
@@ -515,7 +577,7 @@ class network {
 			}
 		}
 	}	
-	// TODO : need to make a new function to broadcast blocks
+	
 };
 
 int main() {
@@ -544,9 +606,9 @@ int main() {
 	for(int i = 0; i < N; i++)
 	{
 		event txn(0, i, exp_dist(txn_mean));
-		time_simulator.sorted_event_add(txn);
+		sorted_event_add(txn);
 		event blk(1, i, exp_dist(block_mean));
-		time_simulator.sorted_event_add(blk);
+		sorted_event_add(blk);
 	}
 
 	while(true)
@@ -555,10 +617,10 @@ int main() {
 		{	
 			event current = time_simulator[0];
 			time_simulator.erase(time_simulator.begin());
-			if(current.type == 0)
-				mycoin->nodelist[current.peer_id].generate_transaction(current.time);
+			if(current.event_type == 0)
+				mycoin.nodelist[current.peer_id]->generate_transaction(current.time);
 			else 
-				mycoin->nodelist[current.peer_id].generate_block(current.time);	
+				mycoin.nodelist[current.peer_id]->generate_block(current.time, current.time_gen);	
   		}	  
 	}
 	// mycoin.print_graph();
@@ -571,4 +633,4 @@ int main() {
 	return 0;
 }
 
-// TODO : Should we make a block if low number of unspect trans
+
