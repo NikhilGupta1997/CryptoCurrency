@@ -340,7 +340,7 @@ class peer {
 
 	void add_txn(tnx trans, network * tmp); 
 		
-	void add_blk(block &blk);
+	void add_blk(block &blk, bool again);
 
 	void add_blk_sim(block &blk, network * tmp);
 
@@ -595,7 +595,7 @@ void peer::add_blk_sim(block &blk, network *tmp)
 	sorted_event_add(blk_gen);
 }
 
-void peer::add_blk(block &blk)
+void peer::add_blk(block &blk, bool again)
 {
 	node *current = chain->add_block(blk.prevblockID, blk.blockID, blk.time_arrival);
 	bool flag = false;
@@ -607,11 +607,14 @@ void peer::add_blk(block &blk)
 	}	
 	if(blk.peer_id != this->ID)
 	{
-		lastBlockArrival = blk.time_arrival;
-		// generate a random variable and create event for next block gen
-		event blk_gen(1, this->ID, lastBlockArrival+exp_dist(block_mean));
-		blk_gen.time_gen = lastBlockArrival;
-		sorted_event_add(blk_gen);
+		if(!again)
+		{
+			lastBlockArrival = blk.time_arrival;
+			// generate a random variable and create event for next block gen
+			event blk_gen(1, this->ID, lastBlockArrival+exp_dist(block_mean));
+			blk_gen.time_gen = lastBlockArrival;
+			sorted_event_add(blk_gen);
+		}
 		if(flag)
 			return;
 		unordered_set<int> trans_id;
@@ -654,7 +657,7 @@ void peer::add_blk(block &blk)
 		for(auto it: orphan_blk[current->blk->blockID])
 		{
 			// cout<<"Retry : block "<<it.blockID<<endl;
-			this->add_blk(it);
+			this->add_blk(it, true);
 		}
 		orphan_blk.erase(current->blk->blockID);
 	}
@@ -737,7 +740,7 @@ int main() {
 			else if(current.event_type ==1)
 				mycoin.nodelist[current.peer_id]->generate_block(current.time, current.time_gen, &mycoin);	
   			else if(current.event_type ==2)
-				mycoin.nodelist[current.peer_id]->add_blk(*(current.blk));	
+				mycoin.nodelist[current.peer_id]->add_blk(*(current.blk), false);	
   		
   		}	  
   		if (counter % 1000 == 999) {
