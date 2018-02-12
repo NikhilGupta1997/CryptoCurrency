@@ -12,11 +12,12 @@
 
 using namespace std;
 
-/// Global Variables ///
 
-int N = 10; // Number of peers
-float txn_mean = 5.0; // Mean of exponential transaction distribution function
-float block_mean = 100.0; // Mean of block generation distribution function
+// Global Variables
+int N = 10; //Number of peers
+float txn_mean = 50.0; // Mean of exponential transaction distribution function
+float cpu_power_mean = 500;
+
 float z = 0.5; // Probability of a fast node
 float ff = 0.5; // Probability of fast-fast node connection
 float fs = 0.25; // Probability of fast-slow node connection
@@ -217,7 +218,7 @@ class blockchain {
 		node *tmp = prev;
 		while(tmp != anc)
 		{
-			// i am adding all unspent here which is wrong but ta ka kat denge
+			// i am adding all unspent here which is wrong 
 			for(auto it : tmp->blk->spent)
 				sorted_add(it, globalQueueTnx);
 			tmp = tmp->parent;
@@ -241,9 +242,14 @@ class blockchain {
 		node *lastNode = find_block(root, prevblockID);
 		if(lastNode == NULL)
 		{
-			cout<<"Error : Block id "<<prevblockID<<endl;
+			// cout<<"Error : Block id "<<prevblockID<<endl;
 			return NULL;
 		}
+		// for(int i = 0; lastNode->nextBlocks.size(); i++)
+		// {
+		// 	if(lastNode->nextBlocks[i]->blk->blockID == blockID && lastNode->nextBlocks[i] != NULL)
+		// 		return lastNode->nextBlocks[i];
+		// }
 		node *newNode = new node();
 		newNode->parent = lastNode;
 		newNode->blk = new block();
@@ -290,9 +296,11 @@ class peer {
 	// unordered_set<int> orphans;
 	unordered_map<int, vector<block>> orphan_blk;
 	double lastBlockArrival = 0.0; 
-	node *longest_one;
+
   public:
+  	node *longest_one;
   	blockchain *chain;
+  	float block_mean;
 
 	peer(int id, bool speed, int active) {
 		ID = id;
@@ -302,6 +310,7 @@ class peer {
 		connected = 0;
 		chain = new blockchain();
 		longest_one = chain->root;
+		block_mean = exp_dist(cpu_power_mean);
 	}
 	// network* give_network();
 	// void set_network(network *coin);
@@ -504,7 +513,7 @@ class network {
 		}
 	}
 	void broadcast_blk(block &blk, peer* recv_node, int send_id) {
-		if (recv_node->blk_exist(blk.blockID))
+		if (recv_node->blk_exist(blk.blockID) || recv_node->get_id() == blk.blockID)
 			return;
 		else {
 			recv_node->add_blk_sim(blk, this);
@@ -520,7 +529,7 @@ class network {
 void peer::generate_transaction(double time, network * tmp) // for intial time would be zero
 {
 
-	float pay_amt = longest_one->peer_amount[this->ID] * (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
+	float pay_amt = 0.01 * longest_one->peer_amount[this->ID] * (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
 	int rec = rand() % N;
 	while(rec == ID)
 	{
@@ -598,7 +607,6 @@ void peer::add_blk(block &blk)
 	}	
 	if(blk.peer_id != this->ID)
 	{
-		// cout<<"1"<<endl;
 		lastBlockArrival = blk.time_arrival;
 		// generate a random variable and create event for next block gen
 		event blk_gen(1, this->ID, lastBlockArrival+exp_dist(block_mean));
@@ -606,11 +614,9 @@ void peer::add_blk(block &blk)
 		sorted_event_add(blk_gen);
 		if(flag)
 			return;
-		// cout<<"2"<<endl;
 		unordered_set<int> trans_id;
 		for(auto it : blk.spent)
 			trans_id.insert(it.id);
-		// cout<<"3"<<endl;
 		for(int i = 0; i < globalQueueTnx.size(); i++)
 		{
 			if(trans_id.find(globalQueueTnx[i].id) != trans_id.end())
@@ -622,21 +628,16 @@ void peer::add_blk(block &blk)
 	}
 	if(flag)
 		return;
-	// cout<<"4"<<endl;
-
-	// cout<<"5"<<endl;
 	ans_long_chain long_chain = chain->getLongestChain(chain->root, 0);
-	// cout<<"6"<<endl;
 	node* new_longest_one = long_chain.last_node;
-	if(this->ID == 0)
-	{	cout<<"For peer "<<this->ID<< ", length is "<<long_chain.length<<endl;
-		if(blk.prevblockID != longest_one->blk->blockID)
-			cout<<"Forking"<<endl;
-	}
+	// if(this->ID == 0)
+	// {	cout<<"For peer "<<this->ID<< ", length is "<<long_chain.length<<endl;
+	// 	if(blk.prevblockID != longest_one->blk->blockID)
+	// 		cout<<"Forking"<<endl;
+	// }
 	if(blk.prevblockID != longest_one->blk->blockID && new_longest_one->blk->blockID == blk.blockID)	
 		chain->update(globalQueueTnx, longest_one, new_longest_one, this->ID);
 	longest_one = new_longest_one;
-	// cout<<"7"<<endl;
 	for(int i = 0; i < N; i++)
 		current->peer_amount[i] = current->parent->peer_amount[i];
 	for(auto it : blk.spent)
@@ -646,7 +647,7 @@ void peer::add_blk(block &blk)
 			continue;
 		current->peer_amount[it.send_id] -= it.amount;
 		current->peer_amount[it.recv_id] += it.amount;
-		current->peer_amount[current->blk->peer_id] += 50;
+		current->peer_amount[current->blk->peer_id] += 50; // mining fees
 	}
 	if(orphan_blk.find(current->blk->blockID) != orphan_blk.end())
 	{
@@ -702,22 +703,28 @@ int main() {
 
 	// Connect peers in the network
 	mycoin.connect_graph();
-
 	// Initialising the queue
 	for(int i = 0; i < N; i++)
 	{
+		cout<<mycoin.nodelist[i]->block_mean<<", ";
 		event txn(0, i, exp_dist(txn_mean));
 		sorted_event_add(txn);
-		event blk(1, i, exp_dist(block_mean));
+		event blk(1, i, exp_dist(mycoin.nodelist[i]->block_mean));
 		sorted_event_add(blk);
 	}
+	cout<<endl;
 	int counter = 0 ;
 	while(true)
 	{
-		// if(counter %500 == 0)
-		// {
+		if(counter %100 == 0)
+		{
+			for(int i = 0; i < N; i++)
+			{
+				cout<<mycoin.nodelist[i]->longest_one->peer_amount[0]<<", ";
+			}
+			cout<<endl;
+		}
 
-		// }
 		counter++;
 		if(time_simulator.size() != 0)
 		{	
