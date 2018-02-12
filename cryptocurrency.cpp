@@ -8,21 +8,26 @@
 #include <limits>
 #include <unordered_set>
 #include <unordered_map>
+#include <fstream>
+
 using namespace std;
 
-// Global Variables
-int N = 10; //Number of peers
-float txn_mean = 5.0; // Mean of exponential transaction distribution function
-float block_mean = 10.0; // TODO : Nikhil
-float z = 0.5; // Probability of a fast node
-float ff = 0.5;
-float fs = 0.25;
-float ss = 0.1;
+/// Global Variables ///
 
+int N = 10; // Number of peers
+float txn_mean = 5.0; // Mean of exponential transaction distribution function
+float block_mean = 100.0; // Mean of block generation distribution function
+float z = 0.5; // Probability of a fast node
+float ff = 0.5; // Probability of fast-fast node connection
+float fs = 0.25; // Probability of fast-slow node connection
+float ss = 0.1; // Probability of slow-slow node connection
 
 int txn_counter = 0;
 int block_counter = 1; // purpose : maintain unique block ids
-// Randomizor Functions
+
+
+/// Randomizor Functions ///
+
 float exp_dist(float mean) {
 	random_device rd;
 	mt19937 gen(rd());
@@ -36,7 +41,10 @@ float uni_dist(float start, float end) {
 	uniform_real_distribution<> dist(start, end);
 	return dist(gen);
 }
-struct tnx {
+
+
+/// Structures ///
+struct tnx { // Transaction Structure
 	int id;
   	int send_id;
   	int recv_id;
@@ -51,23 +59,22 @@ struct tnx {
   		time = this->time;
   	}
 };
-struct block
-{
+
+struct block { // Block Structure
 	int peer_id;
 	int prevblockID;
 	int blockID;
 	double time_arrival;
 	vector<tnx> spent;
 };
-struct event
-{
-	int event_type = 0; //0 for tranx, 1 for block generation, 2 for add block 
+
+struct event { // Global Time Queue Event Element Structure
+	int event_type = 0; // 0 for tranx, 1 for block generation, 2 for add block 
 	int peer_id;
 	double time;
 	double time_gen = 0.0; 
 	block * blk; 
-	event(int event_type, int peer_id, double time)
-	{
+	event(int event_type, int peer_id, double time) {
 		this->event_type = event_type;
 		this->peer_id = peer_id;
 		this->time = time;
@@ -75,78 +82,73 @@ struct event
 	}
 };
 
-vector<event> time_simulator;
+struct node { // Wrapper for Blockchain Block
+	block *blk;
+	node *parent;
+	vector<node *> nextBlocks;
+	vector<float> peer_amount;
+	node() {
+		peer_amount.assign(N, 100.0);
+	}		
+};	
 
-void sorted_event_add(event ev)
-{
+struct ans_long_chain { // Wrapper for obtaining Head of longest chain
+	node *last_node;
+	double time;
+	int length;
+	ans_long_chain(double time, int length) {
+		this->time = time;
+		this->length = length;
+	}
+	ans_long_chain(node *last_block, double time, int length) {
+		this->last_node = last_block;
+		this->time = time;
+		this->length = length;
+	}
+};	
+
+vector<event> time_simulator; // Global Time Queue for Simulator
+
+
+/// Helper Functions ///
+
+// Add element to Global Time Vector
+void sorted_event_add(event ev) {
 	if(time_simulator.size() == 0)
 		time_simulator.push_back(ev);
 	int i = 0;
-	for( ; i < time_simulator.size(); i++)
-	{
+	for(; i < time_simulator.size(); i++) {
 		if(time_simulator[i].time > ev.time)
 			break;
 	}
 	time_simulator.insert(time_simulator.begin()+i, ev);
 }
 
-
-void sorted_add(tnx trans, vector <tnx> &globalQueueTnx)
-{
+// Add element to Peer Transaction Vector
+void sorted_add(tnx trans, vector<tnx> &globalQueueTnx) {
 	if(globalQueueTnx.size() == 0)
 		globalQueueTnx.push_back(trans);
 	int i = 0;
-	for( ; i < globalQueueTnx.size(); i++)
-	{
+	for(; i < globalQueueTnx.size(); i++) {
 		if(globalQueueTnx[i].time > trans.time)
 			break;
 	}
 	globalQueueTnx.insert(globalQueueTnx.begin()+i, trans);
-}
+} 
 
-struct node
-{
-	block *blk;
-	node *parent;
-	vector<node *> nextBlocks;
-	vector<float> peer_amount;
-	node()
-	{
-		peer_amount.assign(N, 100.0);
-	}		
-};	
-struct ans_long_chain
-{
-	node *last_node;
-	double time;
-	int length;
-	ans_long_chain(double time, int length)
-	{
-		this->time = time;
-		this->length = length;
-	}
-	ans_long_chain(node *last_block, double time, int length)
-	{
-		this->last_node = last_block;
-		this->time = time;
-		this->length = length;
-	}
-};	
-class blockchain
-{
+
+/// Classes /// 
+
+class blockchain {
 	public:
 	node *root;
 
-	node* find_block(node *start, int block_id)
-	{
+	node* find_block(node *start, int block_id) {
 		if(start->blk->blockID == block_id)
-		{
 			return start;
-		}
 		// if(start->nextBlocks.size() == 0)
 		// 	return NULL;
-		for(auto child : start->nextBlocks)
-		{
+		for(auto child : start->nextBlocks) {
 			node *ans = find_block(child, block_id);
 			if(ans != NULL)
 				return ans;
@@ -234,7 +236,7 @@ class blockchain
 		// cout<<"update done"<<endl;
 	}
 
-	node *add_block(int prevblockID, int blockID, double time_arrival)
+	node* add_block(int prevblockID, int blockID, double time_arrival)
 	{
 		node *lastNode = find_block(root, prevblockID);
 		if(lastNode == NULL)
@@ -252,7 +254,7 @@ class blockchain
 		return newNode;
 	}
 
-	node * generate_node(double time)
+	node* generate_node(double time)
 	{
 		node *current = new node();
 		current->blk = new block();
@@ -288,9 +290,9 @@ class peer {
 	// unordered_set<int> orphans;
 	unordered_map<int, vector<block>> orphan_blk;
 	double lastBlockArrival = 0.0; 
-	blockchain *chain;
 	node *longest_one;
   public:
+  	blockchain *chain;
 
 	peer(int id, bool speed, int active) {
 		ID = id;
@@ -347,7 +349,6 @@ class peer {
 		return false;	
 	}
 };
-
 
 // Maintains the cryptocurrency network
 class network {
@@ -554,6 +555,7 @@ void peer::generate_block(double time, double time_gen, network * tmp)
 	// cout<<"Block No "<<block_counter<<" Gen by "<<this->ID<<" with transactions = "<<current->blk->spent.size()<<endl;
 	tmp->broadcast_blk(*(current->blk), this, -1);
 }
+
 void peer::add_txn(tnx trans, network *tmp) {
 	// need to change the time
 	if(trans.send_id != this->ID)
@@ -563,6 +565,7 @@ void peer::add_txn(tnx trans, network *tmp) {
 	}	
 	sorted_add(trans, globalQueueTnx);
 }
+
 void peer::add_blk_sim(block &blk, network *tmp)
 {
 	blocks_rec.push_back(blk.blockID);
@@ -582,6 +585,7 @@ void peer::add_blk_sim(block &blk, network *tmp)
 		blk_gen.blk->spent.push_back(it);
 	sorted_event_add(blk_gen);
 }
+
 void peer::add_blk(block &blk)
 {
 	node *current = chain->add_block(blk.prevblockID, blk.blockID, blk.time_arrival);
@@ -654,6 +658,29 @@ void peer::add_blk(block &blk)
 		orphan_blk.erase(current->blk->blockID);
 	}
 }
+
+/// Visualizer ///
+
+// Create edges of graph via graph traversal
+void chain_span(node* root) {
+	for (auto & child : root->nextBlocks) {
+		cout << root->blk->blockID << " -- " << child->blk->blockID << endl;
+		chain_span(child);
+	}
+}
+
+// Function to create a graph file to visualize local blockchain of a peer
+void create_visual(string file, blockchain* object) {
+	ofstream out(file);
+	streambuf *coutbuf = cout.rdbuf();
+	cout.rdbuf(out.rdbuf());
+	cout << "graph {" << endl;
+	chain_span(object->root);
+	cout << "}" << endl;
+	cout.rdbuf(coutbuf);
+}
+
+/// Main Function ///
 int main() {
 
 	// Create P2P network for cryptocurrency
@@ -706,6 +733,11 @@ int main() {
 				mycoin.nodelist[current.peer_id]->add_blk(*(current.blk));	
   		
   		}	  
+  		if (counter % 1000 == 999) {
+  			cout <<" COUNTER " <<endl;
+  			create_visual("testing.txt", mycoin.findnode(0)->chain);
+  			break;
+  		}
 	}
 	// mycoin.print_graph();
 
