@@ -14,9 +14,9 @@ using namespace std;
 
 
 // Global Variables
-int N = 10; //Number of peers
+int N = 50; //Number of peers
 float txn_mean = 50.0; // Mean of exponential transaction distribution function
-float cpu_power_mean = 500;
+float cpu_power_mean = 300.0;
 
 float z = 0.5; // Probability of a fast node
 float ff = 0.5; // Probability of fast-fast node connection
@@ -513,10 +513,11 @@ class network {
 		}
 	}
 	void broadcast_blk(block &blk, peer* recv_node, int send_id) {
-		if (recv_node->blk_exist(blk.blockID) || recv_node->get_id() == blk.blockID)
+		if (recv_node->blk_exist(blk.blockID) )
 			return;
 		else {
-			recv_node->add_blk_sim(blk, this);
+			if(recv_node->get_id() != blk.peer_id)
+				recv_node->add_blk_sim(blk, this);
 			for( const auto& peerlist : adjlist[recv_node->get_id()] ) {
 				if(peerlist.first->get_id() != send_id)
 					broadcast_blk(blk, peerlist.first, recv_node->get_id());
@@ -597,14 +598,22 @@ void peer::add_blk_sim(block &blk, network *tmp)
 
 void peer::add_blk(block &blk, bool again)
 {
+	// if(this->ID == 0)
+	// cout<<"Request to add block id : "<<blk.blockID<<endl;
 	node *current = chain->add_block(blk.prevblockID, blk.blockID, blk.time_arrival);
 	bool flag = false;
 	if(!current) 
 	{
 		// orphans.insert(blk.prevblockID);
+		// cout<<"Error adding "<<blk.blockID<<", "<<blk.prevblockID<<endl;
 		orphan_blk[blk.prevblockID].push_back(blk);
 		flag = true;
 	}	
+	// else
+	// {
+	// 	if(this->ID == 0)
+	// 	cout<<"Added block id : "<<blk.blockID<<endl;
+	// }
 	if(blk.peer_id != this->ID)
 	{
 		if(!again)
