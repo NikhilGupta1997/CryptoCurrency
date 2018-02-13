@@ -14,14 +14,14 @@ using namespace std;
 
 
 // Global Variables
-int N = 40; //Number of peers
+int N = 20; //Number of peers
 float txn_mean = 0.2; // Mean of exponential transaction distribution function
-float cpu_power_mean = 50.0;
-
+float cpu_power_mean = 150.0;
+vector<float> power = {199.583, 115.941, 172.487, 58.5108, 145.76, 91.0283, 53.735, 38.8692, 14.8252, 208.702, 102.165, 142.501, 246.699, 67.5089, 120.889, 37.351, 213.517, 4.63016, 302.976, 11.9882}; 
 float z = 0.4; // Probability of a fast node
 float ff = 0.1; // Probability of fast-fast node connection
-float fs = 0.25; // Probability of fast-slow node connection
-float ss = 0.5; // Probability of slow-slow node connection
+float fs = 0.5; // Probability of fast-slow node connection
+float ss = 0.2; // Probability of slow-slow node connection
 
 int txn_counter = 0;
 int block_counter = 1; // purpose : maintain unique block ids
@@ -311,7 +311,8 @@ class peer {
 		connected = 0;
 		chain = new blockchain();
 		longest_one = chain->root;
-		block_mean = exp_dist(cpu_power_mean);
+		block_mean = power[this->ID];
+		// block_mean = exp_dist(cpu_power_mean);
 	}
 	
 	void generate_transaction(double time, network * tmp); // for intial time would be zero
@@ -457,7 +458,7 @@ class network {
 			if (node_type_prob < z)
 				node_type = true;
 			if (node_type)
-				activation = log(N);
+				activation = 1.5*log(N);
 			else 
 				activation = log(N); 
 			addnode(i, node_type, activation);
@@ -567,7 +568,7 @@ class network {
 void peer::generate_transaction(double time, network * tmp) // for intial time would be zero
 {
 
-	float pay_amt = 0.01 * longest_one->peer_amount[this->ID] * (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
+	float pay_amt = 0.2 * longest_one->peer_amount[this->ID] * (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
 	int rec = rand() % N;
 	while(rec == ID)
 	{
@@ -585,12 +586,12 @@ void peer::generate_block(double time, double time_gen, network * tmp)
 	// cout<<"Generating Block"<<endl;
 	if(lastBlockArrival <= time && lastBlockArrival > time_gen)
 		return;
-	if(globalQueueTnx.size() == 0)
-		return;
+	// if(globalQueueTnx.size() == 0)
+	// 	return;
 	// cout<<"Pass"<<endl;
 	node *current = chain->generate_node(time);
 	current->blk->peer_id = this->ID;
-	int i;
+	int i = 0;
 	for(i = 0; i < globalQueueTnx.size(); i++)
 	{
 		if(globalQueueTnx[i].time <= time)
@@ -821,12 +822,17 @@ int main() {
 				mycoin.nodelist[current.peer_id]->add_blk(*(current.blk), false);	
   		
   			  
-  		if (current.time > 50.0) {
+  		if (current.time > 75.0) {
   			cout <<" COUNTER " <<endl;
-  			create_visual("testing_40_f_l.txt", mycoin.findnode(fast_low_id)->chain);
-  			create_visual("testing_40_s_l.txt", mycoin.findnode(slow_low_id)->chain);
-  			create_visual("testing_40_f_h.txt", mycoin.findnode(fast_high_id)->chain);
-  			create_visual("testing_40_s_h.txt", mycoin.findnode(slow_high_id)->chain);
+  			create_visual("testing_20_f_l_p150.txt", mycoin.findnode(fast_low_id)->chain);
+  			create_visual("testing_20_s_l_p150.txt", mycoin.findnode(slow_low_id)->chain);
+  			create_visual("testing_20_f_h_p150.txt", mycoin.findnode(fast_high_id)->chain);
+  			create_visual("testing_20_s_h_p150.txt", mycoin.findnode(slow_high_id)->chain);
+  			for(int i = 0; i < N; i++)
+			{
+				cout<<mycoin.nodelist[0]->longest_one->peer_amount[i]<<", ";
+			}
+			cout<<endl;
   			break;
   		}
   	    }
