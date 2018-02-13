@@ -14,14 +14,14 @@ using namespace std;
 
 
 // Global Variables
-int N = 500; //Number of peers
-float txn_mean = 50.0; // Mean of exponential transaction distribution function
-float cpu_power_mean = 300.0;
+int N = 40; //Number of peers
+float txn_mean = 0.2; // Mean of exponential transaction distribution function
+float cpu_power_mean = 50.0;
 
-float z = 0.5; // Probability of a fast node
-float ff = 0.5; // Probability of fast-fast node connection
+float z = 0.4; // Probability of a fast node
+float ff = 0.1; // Probability of fast-fast node connection
 float fs = 0.25; // Probability of fast-slow node connection
-float ss = 0.1; // Probability of slow-slow node connection
+float ss = 0.5; // Probability of slow-slow node connection
 
 int txn_counter = 0;
 int block_counter = 1; // purpose : maintain unique block ids
@@ -287,7 +287,7 @@ class peer {
   private:
 	int ID;
 	// float amount;
-	bool type;
+	
 	int activation;
 	int connected;
 	// network *coin;
@@ -298,6 +298,7 @@ class peer {
 	double lastBlockArrival = 0.0; 
 
   public:
+  	bool type;
   	node *longest_one;
   	blockchain *chain;
   	float block_mean;
@@ -456,7 +457,7 @@ class network {
 			if (node_type_prob < z)
 				node_type = true;
 			if (node_type)
-				activation = sqrt(N);
+				activation = log(N);
 			else 
 				activation = log(N); 
 			addnode(i, node_type, activation);
@@ -494,7 +495,7 @@ class network {
 
 	bool disconnected() {
 		dfs(0);
-		cout << "ISISIS = " << visited.size();
+		// cout << "ISISIS = " << visited.size();
 		if (visited.size() == N)
 			return false;
 		else
@@ -635,7 +636,7 @@ void peer::add_blk_sim(block &blk, network *tmp)
 void peer::add_blk(block &blk, bool again)
 {
 	// if(this->ID == 0)
-	// cout<<"Request to add block id : "<<blk.blockID<<endl;
+	// 	cout<<"Request to add block id : "<<blk.blockID<<endl;
 	node *current = chain->add_block(blk.prevblockID, blk.blockID, blk.time_arrival);
 	bool flag = false;
 	if(!current) 
@@ -753,23 +754,64 @@ int main() {
 	}
 	cout<<endl;
 	int counter = 0 ;
+
+	int fast_low_id = 0;
+	double fast_low_pow = -1.0; 
+	int fast_high_id = 0;
+	double fast_high_pow = 100000.0;
+	int slow_low_id = 0;
+	double slow_low_pow = -1.0;
+	int slow_high_id = 0;
+	double slow_high_pow = 1000000.0;
+
+	for(int i = 0; i < N; i++)
+	{
+		if(mycoin.nodelist[i]->type)
+		{
+			if(mycoin.nodelist[i]->block_mean >fast_low_pow)
+			{
+				fast_low_pow = mycoin.nodelist[i]->block_mean;
+				fast_low_id = i;
+			}
+			if(mycoin.nodelist[i]->block_mean < fast_high_pow)
+			{
+				fast_high_pow = mycoin.nodelist[i]->block_mean;
+				fast_high_id = i;
+			}
+		}
+		else
+		{
+			if(mycoin.nodelist[i]->block_mean > slow_low_pow)
+			{
+				slow_low_pow = mycoin.nodelist[i]->block_mean;
+				slow_low_id = i;
+			}
+			if(mycoin.nodelist[i]->block_mean < slow_high_pow)
+			{
+				slow_high_pow = mycoin.nodelist[i]->block_mean;
+				slow_high_id = i;
+			}
+		}
+		
+	}
+
 	while(true)
 	{
-		if(counter %100 == 0)
-		{
-			for(int i = 0; i < N; i++)
-			{
-				cout<<mycoin.nodelist[i]->longest_one->peer_amount[0]<<", ";
-			}
-			cout<<endl;
-		}
+		// if(counter %100 == 0)
+		// {
+		// 	for(int i = 0; i < N; i++)
+		// 	{
+		// 		cout<<mycoin.nodelist[i]->longest_one->peer_amount[0]<<", ";
+		// 	}
+		// 	cout<<endl;
+		// }
 
 		counter++;
 		if(time_simulator.size() != 0)
 		{	
 			// cout<<"Num_blks : "<<block_counter<<" , Num_tnx: "<<txn_counter<<endl;
 			event current = time_simulator[0];
-			// cout<<current.event_type<<endl;
+			// cout<<current.time<<endl;
 			time_simulator.erase(time_simulator.begin());
 			if(current.event_type == 0)
 				mycoin.nodelist[current.peer_id]->generate_transaction(current.time, &mycoin);
@@ -778,12 +820,16 @@ int main() {
   			else if(current.event_type ==2)
 				mycoin.nodelist[current.peer_id]->add_blk(*(current.blk), false);	
   		
-  		}	  
-  		if (counter % 1000 == 999) {
+  			  
+  		if (current.time > 50.0) {
   			cout <<" COUNTER " <<endl;
-  			create_visual("testing.txt", mycoin.findnode(0)->chain);
+  			create_visual("testing_40_f_l.txt", mycoin.findnode(fast_low_id)->chain);
+  			create_visual("testing_40_s_l.txt", mycoin.findnode(slow_low_id)->chain);
+  			create_visual("testing_40_f_h.txt", mycoin.findnode(fast_high_id)->chain);
+  			create_visual("testing_40_s_h.txt", mycoin.findnode(slow_high_id)->chain);
   			break;
   		}
+  	    }
 	}
 	// mycoin.print_graph();
 
