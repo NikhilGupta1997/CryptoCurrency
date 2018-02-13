@@ -14,7 +14,7 @@ using namespace std;
 
 
 // Global Variables
-int N = 50; //Number of peers
+int N = 500; //Number of peers
 float txn_mean = 50.0; // Mean of exponential transaction distribution function
 float cpu_power_mean = 300.0;
 
@@ -312,8 +312,6 @@ class peer {
 		longest_one = chain->root;
 		block_mean = exp_dist(cpu_power_mean);
 	}
-	// network* give_network();
-	// void set_network(network *coin);
 	
 	void generate_transaction(double time, network * tmp); // for intial time would be zero
 
@@ -365,6 +363,7 @@ class network {
   	
 	map<int, vector< pair< peer*, float > > > adjlist;
 	deque<peer*> unactive;
+	vector<int> visited;
 
 	void add_edge(int send_id, peer* recv_node, float latency) {
 		if(adjlist.find(send_id) == adjlist.end()) {
@@ -449,6 +448,20 @@ class network {
 	}
 
 	void connect_graph() {
+		// Add peers the network
+		for (int i = 0; i < N; i++) {
+			float node_type_prob = uni_dist(0,1);
+			bool node_type = false;
+			int activation;
+			if (node_type_prob < z)
+				node_type = true;
+			if (node_type)
+				activation = sqrt(N);
+			else 
+				activation = log(N); 
+			addnode(i, node_type, activation);
+		}
+		// Connect Peers
 		while(is_connected() == false) {
 			peer* node = unactive.front();
 			bool node_type = node->get_type();
@@ -469,6 +482,29 @@ class network {
 			}
 			unactive.pop_front();
 		}
+	}
+
+	void dfs(int node_id) {
+		visited.push_back(node_id);
+		for( const auto& peerlist : adjlist[node_id] ) {
+			if(find(visited.begin(), visited.end(), peerlist.first->get_id())==visited.end())
+				dfs(peerlist.first->get_id());
+		}
+	}
+
+	bool disconnected() {
+		dfs(0);
+		cout << "ISISIS = " << visited.size();
+		if (visited.size() == N)
+			return false;
+		else
+			return true;
+	}
+
+	void reset_graph() {
+		adjlist.clear();
+		unactive.clear();
+		visited.clear();
 	}
 
 	void print_graph() {
@@ -699,22 +735,13 @@ int main() {
 	// Create P2P network for cryptocurrency
 	network mycoin;
 
-	// Add peers the network
-	for (int i = 0; i < N; i++) {
-		float node_type_prob = uni_dist(0,1);
-		bool node_type = false;
-		int activation;
-		if (node_type_prob < z)
-			node_type = true;
-		if (node_type)
-			activation = sqrt(N);
-		else 
-			activation = log(N); 
-		mycoin.addnode(i, node_type, activation);
-	}
-
 	// Connect peers in the network
 	mycoin.connect_graph();
+	while(mycoin.disconnected()){
+		mycoin.reset_graph();
+		mycoin.connect_graph();
+	}
+
 	// Initialising the queue
 	for(int i = 0; i < N; i++)
 	{
