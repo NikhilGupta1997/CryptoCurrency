@@ -655,6 +655,16 @@ void peer::add_blk(block &blk, bool again) {
 	}
 }
 
+// Function to print to tree output file
+void tree_file(node* root, ofstream &out, std::vector<double> &vec)
+{
+	vec[root->blk->blockID] = root->blk->time_arrival;
+	for (auto & child : root->nextBlocks) 
+	{
+		out << root->blk->blockID << " --> " << child->blk->blockID << endl;
+		tree_file(child, out, vec);
+	}
+}
 /// Visualizer ///
 
 // Create edges of graph via graph traversal
@@ -756,6 +766,26 @@ int main() {
 	  			for(int i = 0; i < N; i++)
 					cout<<mycoin.nodelist[0]->longest_one->peer_amount[i]<<", ";
 				cout<<endl;
+				for(int k = 0; k < N; k++)
+				{
+					string file_name = "tree_id_" + to_string(k)+".txt";
+					ofstream out(file_name);
+					if(mycoin.nodelist[k]->type)
+						out<<"Fast Node"<<endl;
+					else
+						out<<"Slow Node"<<endl;
+					out<<endl;
+					vector<double> arrival_time;
+					arrival_time.assign(block_counter,-1.0);
+					tree_file(mycoin.nodelist[k]->chain->root, out, arrival_time);
+					out<<endl<<"Arrival Times for Block"<<endl;
+					for(int i = 0; i < arrival_time.size(); i++)
+					{
+						if(arrival_time[i] > 0.0)
+							out<<i<<" : "<<arrival_time[i]<<endl;
+					}
+					out.close();
+				}
 	  			break;
 	  		}
   	    }
