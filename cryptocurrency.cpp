@@ -26,9 +26,6 @@ float ss = 0.2; // Probability of slow-slow node connection
 int txn_counter = 0; // purpose : maintain unique txn ids
 int block_counter = 1; // purpose : maintain unique block ids
 
-vector<float> power;// = {199.583, 115.941, 172.487, 58.5108, 145.76, 91.0283, 53.735, 38.8692, 14.8252, 208.702, 102.165, 142.501, 246.699, 67.5089, 120.889, 37.351, 213.517, 4.63016, 302.976, 11.9882}; 
-
-
 /// Randomizor Functions ///
 
 float exp_dist(float mean) { // Exponential Distribution
@@ -138,17 +135,14 @@ void sorted_event_add(event ev) {
 
 // Add element to Peer Transaction Vector
 void sorted_add(tnx trans, vector<tnx> &globalQueueTnx) {
-	if(globalQueueTnx.size() == 0) {
+	if(globalQueueTnx.size() == 0)
 		globalQueueTnx.push_back(trans);
-		return;
-	}
-
-	for(int i = 0; i < globalQueueTnx.size(); i++) {
-		if(globalQueueTnx[i].time > trans.time) {
-			globalQueueTnx.insert(globalQueueTnx.begin()+i, trans);
+	int i;
+	for(i = 0; i < globalQueueTnx.size(); i++) {
+		if(globalQueueTnx[i].time > trans.time)
 			break;
-		}
 	}
+	globalQueueTnx.insert(globalQueueTnx.begin()+i, trans);
 } 
 
 
