@@ -332,14 +332,14 @@ class peer { // The peer node class
 		return false;	
 	}
 
-	bool blk_exist(int id) { // Check if block exists
+	bool blk_exist(int id) { // Check if block already received
 		for(auto it : blocks_rec)
 			if(it == id)
 				return true;
 		return false;	
 	}
 
-	void generate_transaction(double time, network * tmp); // for intial time would be zero
+	void generate_transaction(double time, network * tmp); 
 
 	void generate_block(double time, double time_gen, network * tmp);
 
@@ -553,8 +553,8 @@ class network {
 	
 };
 
-void peer::generate_transaction(double time, network * tmp) { // for intial time would be zero 
-
+// Generate a transaction at a peer
+void peer::generate_transaction(double time, network * tmp) { // for intial transaction, time would be zero 
 	float pay_amt = 0.2 * longest_one->peer_amount[this->ID] * (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
 	int rec = rand() % N;
 	while(rec == ID)
@@ -566,25 +566,26 @@ void peer::generate_transaction(double time, network * tmp) { // for intial time
 	tmp->broadcast_tnx(trans, this, -1);
 }
 
-void peer::generate_block(double time, double time_gen, network * tmp) {
+// Generate a block at a peer
+void peer::generate_block(double time, double time_gen, network * tmp) { 
 	// add only those transaction for which time is less than this
 	if(lastBlockArrival <= time && lastBlockArrival > time_gen)
 		return;
 	node *current = chain->generate_node(time);
 	current->blk->peer_id = this->ID;
-	int i = 0;
-	for(i = 0; i < globalQueueTnx.size(); i++) {
+	for(int i = 0; i < globalQueueTnx.size(); i++) {
 		if(globalQueueTnx[i].time <= time)
 			current->blk->spent.push_back(globalQueueTnx[i]);
-		else 
+		else {
+			globalQueueTnx.erase(globalQueueTnx.begin(), globalQueueTnx.begin()+i);
 			break;
+		}
 	}
-	globalQueueTnx.erase(globalQueueTnx.begin(), globalQueueTnx.begin()+i);
 	tmp->broadcast_blk(*(current->blk), this, -1);
 }
 
-void peer::add_txn(tnx trans, network *tmp) {
-	// need to change the time
+// Add a transaction to the peer txn list (adjusted for network latencies)
+void peer::add_txn(tnx trans, network *tmp) { 
 	if(trans.send_id != this->ID) {
 		double latency = tmp->get_latency(tmp->nodelist[trans.send_id], this, 0);
 		trans.time += latency;
@@ -610,6 +611,7 @@ void peer::add_blk_sim(block &blk, network *tmp) {
 	sorted_event_add(blk_gen);
 }
 
+// Attempt to add a block to a peer blockchain
 void peer::add_blk(block &blk, bool again) {
 	node *current = chain->add_block(blk.prevblockID, blk.blockID, blk.time_arrival);
 	bool flag = false;
