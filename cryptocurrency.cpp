@@ -120,25 +120,22 @@ vector<event> time_simulator; // Global Time Queue for Simulator
 
 // Add element to Global Time Vector
 void sorted_event_add(event ev) {
-	if(time_simulator.size() == 0) {
+	if(time_simulator.size() == 0)
 		time_simulator.push_back(ev);
-		return;
-	}
-	
-	for(int i = 0; i < time_simulator.size(); i++) {
-		if(time_simulator[i].time > ev.time) {
-			time_simulator.insert(time_simulator.begin()+i, ev);
+	int i = 0;
+	for(; i < time_simulator.size(); i++) {
+		if(time_simulator[i].time > ev.time)
 			break;
-		}
 	}
+	time_simulator.insert(time_simulator.begin()+i, ev);
 }
 
 // Add element to Peer Transaction Vector
 void sorted_add(tnx trans, vector<tnx> &globalQueueTnx) {
 	if(globalQueueTnx.size() == 0)
 		globalQueueTnx.push_back(trans);
-	int i;
-	for(i = 0; i < globalQueueTnx.size(); i++) {
+	int i = 0;
+	for(; i < globalQueueTnx.size(); i++) {
 		if(globalQueueTnx[i].time > trans.time)
 			break;
 	}
