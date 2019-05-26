@@ -46,11 +46,11 @@ float uni_dist(float start, float end) { // Uniform Distribution
 /// Structures ///
 
 struct tnx { // Transaction Structure
-	int id;
-  	int send_id;
-  	int recv_id;
-  	float amount;
-  	double time;
+	int id; // Unique tnx id
+  	int send_id; // Peer id of sender
+  	int recv_id; // Peer id of receiver
+  	float amount; // Amount of transaction (in value of cryptocurrency)
+  	double time; // Time when txn was created
 
   	tnx(int txn_id, int id1, int id2, float val, double time) { // Create a new transaction
   		id 		= txn_id;
@@ -61,20 +61,22 @@ struct tnx { // Transaction Structure
   	}
 };
 
+
 struct block { // Block Structure
-	int peer_id;
-	int prevblockID;
-	int blockID;
-	double time_arrival;
-	vector<tnx> spent;
+	int peer_id; // The peer id of the user who created the block
+	int blockID; // The unique block id
+	int prevblockID; // The block id of the parent
+	double time_arrival; // Time of receiving block by user
+	vector<tnx> spent; // The txns in the block
 };
+
 
 struct event { // Global Time Queue Event Element Structure
 	int event_type = 0; // 0 for tranx, 1 for block generation, 2 for add block 
-	int peer_id;
-	double time;
-	double time_gen = 0.0; 
-	block * blk; 
+	int peer_id; // Id of the user who created the event
+	double time; // The when event was created
+	double time_gen = 0.0; // ??
+	block* blk; // The block associated with the event
 
 	event(int event_type, int peer_id, double time) { // Create a new event
 		this->event_type = event_type;
@@ -85,20 +87,20 @@ struct event { // Global Time Queue Event Element Structure
 };
 
 struct node { // Wrapper for Blockchain Block
-	block *blk;
-	node *parent;
-	vector<node *> nextBlocks;
-	vector<float> peer_amount;
+	block *blk; // The block inside the node
+	node *parent; // The parent node the current node is connected to 
+	vector<node *> nextBlocks; // The children node of the current node
+	vector<float> peer_amount; // The amounnt of money of each user at this point of the blockchain
 
 	node() { // Create a new node
-		peer_amount.assign(N, 100.0);
+		peer_amount.assign(N, 100.0); // Each peer initally started out with 100 currency value
 	}		
 };	
 
 struct ans_long_chain { // Wrapper for obtaining Head of longest chain
-	node *last_node;
-	double time;
-	int length;
+	node *last_node; // The last node od the longest chain in a user's blockchain
+	double time; // ??
+	int length; // Length of the longest chain
 
 	// Constructors
 	ans_long_chain(double time, int length) {
@@ -116,12 +118,13 @@ struct ans_long_chain { // Wrapper for obtaining Head of longest chain
 vector<event> time_simulator; // Global Time Queue for Simulator
 
 
-/// Helper Functions ///
+/// Queue Helper Functions ///
 
 // Add element to Global Time Vector
 void sorted_event_add(event ev) {
-	if(time_simulator.size() == 0)
+	if(time_simulator.size() == 0) // time simulator is empty
 		time_simulator.push_back(ev);
+	// TODO: This portion below should be in else case
 	int i = 0;
 	for(; i < time_simulator.size(); i++) {
 		if(time_simulator[i].time > ev.time)
@@ -134,6 +137,7 @@ void sorted_event_add(event ev) {
 void sorted_add(tnx trans, vector<tnx> &globalQueueTnx) {
 	if(globalQueueTnx.size() == 0)
 		globalQueueTnx.push_back(trans);
+	// TODO: This portion below should be in else case
 	int i = 0;
 	for(; i < globalQueueTnx.size(); i++) {
 		if(globalQueueTnx[i].time > trans.time)
@@ -271,32 +275,33 @@ class blockchain { // The blockchain class
 
 class network; // Global network class declaration
 
-class peer { // The peer node class 
+class peer { // The peer node class (USER)
   private:
-	int ID;
-	int activation;
-	int connected;
-	vector <tnx> globalQueueTnx; // Unspent transactions
-	vector<int> blocks_rec;
-	unordered_map<int, vector<block>> orphan_blk;
+	int ID; // Unique user id
+	int activation; // Miminum number of peer connections needed to be active and create blocks
+	int connected; // Number of other peers the user is connected to
+	vector<tnx> globalQueueTnx; // Unspent transactions
+	vector<int> blocks_rec; // This is queue of blocks received from network
+	unordered_map< int, vector<block> > orphan_blk; 
 	double lastBlockArrival = 0.0; 
 
   public:
-  	bool type;
-  	node *longest_one;
-  	blockchain *chain;
-  	float block_mean;
+  	bool type; // User is either "fast" or "slow"
+  	node *longest_one; // This points to the last added node in the longest chain of the user's blockchain
+  	blockchain *chain; // User's personal copy of the blockchain
+  	float block_mean; // The average time it takes the user to create a block to send
 
 	peer(int id, bool speed, int active) { // Create a new peer for the network
 		ID = id;
 		type = speed;
 		activation = active;
-		connected = 0;
+		connected = 0; 
 		chain = new blockchain();
 		longest_one = chain->root;
-		block_mean = exp_dist(cpu_power_mean);
+		block_mean = exp_dist(cpu_power_mean); 
 	}
 
+	// Functions to access private variables
 	int get_id() { // Get node id
 		return ID;
 	}
@@ -312,13 +317,13 @@ class peer { // The peer node class
 			return false;
 	}
 
-	void add_conn() {
+	void add_conn() { // Increases connected count
 		connected += 1;
 	}
 
 	bool txn_exists(int id) { // Check if a txn exists in the txn queue
-		for(auto it : globalQueueTnx)
-			if(it.id == id)
+		for(auto curr_txn : globalQueueTnx)
+			if(curr_txn.id == id)
 				return true;
 		return false;	
 	}
@@ -665,6 +670,7 @@ void tree_file(node* root, ofstream &out, std::vector<double> &vec)
 		tree_file(child, out, vec);
 	}
 }
+
 /// Visualizer ///
 
 // Create edges of graph via graph traversal
